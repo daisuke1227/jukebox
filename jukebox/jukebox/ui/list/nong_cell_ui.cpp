@@ -27,7 +27,8 @@ bool NongCellUI::init(const cocos2d::CCSize& size,
                       std::function<void()> onTrash,
                       std::function<void()> onFixDefault,
                       std::function<void()> onDownload,
-                      std::function<void()> onEdit) {
+                      std::function<void()> onEdit,
+                      std::function<void()> onPlay) {
     if (!CCNode::init()) {
         return false;
     }
@@ -38,6 +39,7 @@ bool NongCellUI::init(const cocos2d::CCSize& size,
     m_onFixDefault = onFixDefault;
     m_onDownload = onDownload;
     m_onEdit = onEdit;
+    m_onPlay = onPlay;
 
     return true;
 }
@@ -267,11 +269,22 @@ void NongCellUI::build() {
     m_trashButton->setID("trash-button");
     m_buttonsMenu->addChild(m_trashButton);
 
+    const char* playSpriteName = m_isPlaying
+                                      ? "GJ_stopMusicBtn_001.png"
+                                      : "GJ_playMusicBtn_001.png";
+    m_playSprite = CCSprite::createWithSpriteFrameName(playSpriteName);
+    m_playSprite->setScale(0.7f);
+    m_playButton = CCMenuItemSpriteExtra::create(
+        m_playSprite, this, menu_selector(NongCellUI::onPlay));
+    m_playButton->setID("play-button");
+    m_buttonsMenu->addChild(m_playButton);
+
     m_selectButton->setVisible(m_showSelectButton);
     m_trashButton->setVisible(m_showTrashButton);
     m_fixButton->setVisible(m_showFixDefaultButton);
     m_downloadButton->setVisible(m_showDownloadButton);
     m_editButton->setVisible(m_showEditButton);
+    m_playButton->setVisible(m_showPlayButton);
 
     m_downloadProgressContainer->setVisible(m_isDownloading);
     if (m_isDownloading) {
@@ -299,16 +312,29 @@ void NongCellUI::onTrash(CCObject*) { m_onTrash(); }
 void NongCellUI::onFixDefault(CCObject*) { m_onFixDefault(); }
 void NongCellUI::onDownload(CCObject*) { m_onDownload(); }
 void NongCellUI::onEdit(CCObject*) { m_onEdit(); }
+void NongCellUI::onPlay(CCObject*) { m_onPlay(); }
+
+void NongCellUI::updatePlayButton() {
+    if (!m_playSprite) {
+        return;
+    }
+    const char* frameName = m_isPlaying
+                                 ? "GJ_stopMusicBtn_001.png"
+                                 : "GJ_playMusicBtn_001.png";
+    m_playSprite->setDisplayFrame(
+        CCSpriteFrameCache::sharedSpriteFrameCache()->spriteFrameByName(frameName));
+}
 
 NongCellUI* NongCellUI::create(const cocos2d::CCSize& size,
                                std::function<void()> onSelect,
                                std::function<void()> onTrash,
                                std::function<void()> onFixDefault,
                                std::function<void()> onDownload,
-                               std::function<void()> onEdit) {
+                               std::function<void()> onEdit,
+                               std::function<void()> onPlay) {
     auto ret = new NongCellUI();
     if (ret &&
-        ret->init(size, onSelect, onTrash, onFixDefault, onDownload, onEdit)) {
+        ret->init(size, onSelect, onTrash, onFixDefault, onDownload, onEdit, onPlay)) {
         return ret;
     }
     CC_SAFE_DELETE(ret);

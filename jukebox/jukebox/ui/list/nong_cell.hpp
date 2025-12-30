@@ -1,11 +1,13 @@
 #pragma once
 
+#include <filesystem>
 #include <optional>
 
 #include <Geode/cocos/base_nodes/CCNode.h>
 #include <Geode/cocos/cocoa/CCObject.h>
 #include <Geode/cocos/menu_nodes/CCMenu.h>
 #include <Geode/loader/Event.hpp>
+#include <Geode/utils/web.hpp>
 
 #include <jukebox/events/get_song_info.hpp>
 #include <jukebox/events/song_download_failed.hpp>
@@ -30,12 +32,17 @@ protected:
 
     NongCellUI* m_nongCell;
 
+    std::optional<std::string> m_streamUrl;
+
     bool m_isDefault;
     bool m_isActive;
     bool m_isDownloaded;
     bool m_isDownloadable;
     bool m_isDownloading;
     bool m_isVerified;
+
+    geode::EventListener<geode::utils::web::WebTask> m_streamDownloadListener;
+    std::optional<std::filesystem::path> m_tempFilePath;
 
     geode::EventListener<geode::EventFilter<event::SongDownloadProgress>>
         m_progressListener{this, &NongCell::onDownloadProgress};
@@ -67,6 +74,7 @@ protected:
     void onFixDefault();
     void onDownload();
     void onEdit();
+    void onPlay();
 
     void deleteSong(bool onlyAudio);
     bool isIndex();

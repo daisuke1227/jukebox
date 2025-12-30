@@ -1,20 +1,24 @@
 #include <jukebox/ui/list/nong_cell.hpp>
 
+#include <fstream>
 #include <functional>
 
+#include <fmt/core.h>
 #include <GUI/CCControlExtension/CCScale9Sprite.h>
+#include <Geode/binding/CCMenuItemSpriteExtra.hpp>
+#include <Geode/binding/FLAlertLayer.hpp>
+#include <Geode/binding/FMODAudioEngine.hpp>
+#include <Geode/binding/GameManager.hpp>
 #include <Geode/cocos/base_nodes/CCNode.h>
 #include <Geode/cocos/cocoa/CCGeometry.h>
 #include <Geode/cocos/cocoa/CCObject.h>
 #include <Geode/cocos/menu_nodes/CCMenu.h>
 #include <Geode/cocos/sprite_nodes/CCSprite.h>
-#include <fmt/core.h>
-#include <Geode/binding/CCMenuItemSpriteExtra.hpp>
-#include <Geode/binding/FLAlertLayer.hpp>
 #include <Geode/loader/Event.hpp>
 #include <Geode/loader/Log.hpp>
 #include <Geode/ui/Layout.hpp>
 #include <Geode/ui/Popup.hpp>
+#include <Geode/utils/string.hpp>
 
 #include <jukebox/events/song_download_failed.hpp>
 #include <jukebox/events/song_download_finished.hpp>
@@ -32,6 +36,8 @@ using namespace geode::prelude;
 
 namespace jukebox {
 
+static NongCell* s_playingCell = nullptr;
+
 bool NongCell::init(
     int gdSongID, const std::string& uniqueID, const cocos2d::CCSize& size,
     std::optional<int> levelID,
@@ -48,7 +54,7 @@ bool NongCell::init(
     m_nongCell = NongCellUI::create(
         size, [this] { this->onSelect(); }, [this] { this->onTrash(); },
         [this] { this->onFixDefault(); }, [this] { this->onDownload(); },
-        [this] { this->onEdit(); });
+        [this] { this->onEdit(); }, [this] { this->onPlay(); });
 
     if (this->isIndex()) {
         bool success = this->initIndex();
@@ -156,6 +162,7 @@ bool NongCell::initIndex() {
         metadataList.push_back("youtube");
     } else if (indexSongMetadata->url.has_value()) {
         metadataList.push_back("hosted");
+        m_streamUrl = indexSongMetadata->url.value();
     } else {
         log::error("Couldn't figure out index song type of {}",
                    indexSongMetadata->uniqueID);
@@ -197,11 +204,13 @@ void NongCell::build() {
     m_nongCell->m_isDownloaded = m_isDownloaded;
     m_nongCell->m_isSelected = m_isActive;
     m_nongCell->m_isDownloading = m_isDownloading;
+    m_nongCell->m_isPlaying = (s_playingCell == this);
 
     m_nongCell->m_showDownloadButton = m_isDownloadable && !m_isDownloaded;
     m_nongCell->m_showFixDefaultButton = m_isDefault;
     m_nongCell->m_showSelectButton = m_isDownloaded || m_isDefault;
     m_nongCell->m_showTrashButton = !m_isDefault && !this->isIndex();
+    m_nongCell->m_showPlayButton = true;
 
     m_nongCell->build();
 }
@@ -237,6 +246,87 @@ void NongCell::onEdit() {
         return;
     }
     NongAddPopup::create(m_songID, songInfoOpt.value())->show();
+}
+
+void NongCell::onPlay() {
+    auto engine = FMODAudioEngine::sharedEngine();
+
+    if (s_playingCell == this) {
+        engine->stopMusic(0);
+        GameManager::sharedState()->playMenuMusic();
+        s_playingCell = nullptr;
+        m_nongCell->m_isPlaying = false;
+        m_nongCell->updatePlayButton();
+        return;
+    }
+
+    if (s_playingCell) {
+        s_playingCell->m_nongCell->m_isPlaying = false;
+        s_playingCell->m_nongCell->updatePlayButton();
+    }
+
+    std::string playPath;
+
+    if (m_streamUrl.has_value()) {
+        auto tempDir = std::filesystem::temp_directory_path() / "jukebox";
+        std::filesystem::create_directories(tempDir);
+        auto tempFile = tempDir / fmt::format("stream_{}.mp3", m_uniqueID);
+        m_tempFilePath = tempFile;
+
+        m_streamDownloadListener.bind([this, engine](geode::utils::web::WebTask::Event* e) {
+            if (auto res = e->getValue()) {
+                if (res->ok()) {
+                    auto data = res->data();
+                    std::ofstream file(m_tempFilePath.value(), std::ios::binary);
+                    file.write(reinterpret_cast<const char*>(data.data()), data.size());
+                    file.close();
+
+#ifdef GEODE_IS_WINDOWS
+                    std::string path = geode::utils::string::wideToUtf8(m_tempFilePath.value().c_str());
+#else
+                    std::string path = m_tempFilePath.value().string();
+#endif
+                    engine->stopMusic(0);
+                    engine->playMusic(path, false, 0.f, 0);
+                    s_playingCell = this;
+                    m_nongCell->m_isPlaying = true;
+                    m_nongCell->updatePlayButton();
+                } else {
+                    log::error("Failed to download stream: {}", res->code());
+                }
+            } else if (e->isCancelled()) {
+                log::info("Stream download cancelled");
+            }
+        });
+
+        auto req = geode::utils::web::WebRequest();
+        m_streamDownloadListener.setFilter(req.get(m_streamUrl.value()));
+        return;
+    } else {
+        auto nongsOpt = NongManager::get().getNongs(m_songID);
+        if (!nongsOpt.has_value()) {
+            return;
+        }
+        std::optional<Song*> songInfoOpt = nongsOpt.value()->findSong(m_uniqueID);
+        if (!songInfoOpt.has_value()) {
+            return;
+        }
+        Song* song = songInfoOpt.value();
+        if (!song->path().has_value() || !std::filesystem::exists(song->path().value())) {
+            return;
+        }
+#ifdef GEODE_IS_WINDOWS
+        playPath = geode::utils::string::wideToUtf8(song->path().value().c_str());
+#else
+        playPath = song->path().value().string();
+#endif
+    }
+
+    engine->stopMusic(0);
+    engine->playMusic(playPath, false, 0.f, 0);
+    s_playingCell = this;
+    m_nongCell->m_isPlaying = true;
+    m_nongCell->updatePlayButton();
 }
 
 void NongCell::onFixDefault() {

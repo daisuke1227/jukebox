@@ -34,13 +34,16 @@ protected:
     CCMenuItemSpriteExtra* m_fixButton = nullptr;
     CCMenuItemSpriteExtra* m_downloadButton = nullptr;
     CCMenuItemSpriteExtra* m_editButton = nullptr;
+    CCMenuItemSpriteExtra* m_playButton = nullptr;
+    cocos2d::CCSprite* m_playSprite = nullptr;
 
     cocos2d::CCMenu* m_downloadProgressContainer = nullptr;
     cocos2d::CCProgressTimer* m_downloadProgressTimer = nullptr;
 
     bool init(const cocos2d::CCSize& size, std::function<void()> onSelect,
               std::function<void()> onTrash, std::function<void()> onFixDefault,
-              std::function<void()> onDownload, std::function<void()> onEdit);
+              std::function<void()> onDownload, std::function<void()> onEdit,
+              std::function<void()> onPlay);
 
 public:
     std::string m_songName = "None";
@@ -54,15 +57,18 @@ public:
     std::function<void()> m_onFixDefault;
     std::function<void()> m_onDownload;
     std::function<void()> m_onEdit;
+    std::function<void()> m_onPlay;
 
     bool m_showSelectButton = false;
     bool m_showTrashButton = false;
     bool m_showFixDefaultButton = false;
     bool m_showDownloadButton = false;
     bool m_showEditButton = false;
+    bool m_showPlayButton = false;
     bool m_isVerified = false;
     bool m_isDownloaded = false;
     bool m_isSelected = false;
+    bool m_isPlaying = false;
 
     bool m_isDownloading = 0;
     float m_downloadProgress = 0;
@@ -72,16 +78,19 @@ public:
                               std::function<void()> onTrash,
                               std::function<void()> onFixDefault,
                               std::function<void()> onDownload,
-                              std::function<void()> onEdit);
+                              std::function<void()> onEdit,
+                              std::function<void()> onPlay);
 
     void build();
     void buildOnlyDownloadProgress();
+    void updatePlayButton();
 
     void onSelect(CCObject*);
     void onTrash(CCObject*);
     void onFixDefault(CCObject*);
     void onDownload(CCObject*);
     void onEdit(CCObject*);
+    void onPlay(CCObject*);
 };
 
 }  // namespace jukebox
